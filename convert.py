@@ -86,7 +86,7 @@ def parse_vless(uri: str) -> dict | None:
         uuid, host_port = rest2.split("@", 1)
         if ":" in host_port:
             server, port_str = host_port.rsplit(":", 1)
-            port = int(port_str)
+            port = int(port_str.strip("/"))
         else:
             server = host_port
             port = 443
@@ -158,7 +158,7 @@ def parse_trojan(uri: str) -> dict | None:
     params = urllib.parse.parse_qs(query_str)
     if ":" in host_port:
         server, port_str = host_port.rsplit(":", 1)
-        port = int(port_str)
+        port = int(port_str.strip("/"))
     else:
         server = host_port
         port = 443
@@ -223,7 +223,7 @@ def parse_ss(uri: str) -> dict | None:
         return None
     if ":" in server_port:
         server, port_str = server_port.rsplit(":", 1)
-        port = int(port_str)
+        port = int(port_str.strip("/"))
     else:
         server = server_port
         port = 443
