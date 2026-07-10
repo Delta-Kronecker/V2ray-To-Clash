@@ -1,0 +1,12 @@
+name: Convert Subscription to Clash
+description: Paste your v2ray subscription URL to generate a Clash config
+labels: ["convert"]
+body:
+  - type: input
+    id: subscription_url
+    attributes:
+      label: Subscription URL
+      description: Paste your v2ray/vless/trojan subscription link here
+      placeholder: "https://example.com/sub/xxx"
+    validations:
+      required: true

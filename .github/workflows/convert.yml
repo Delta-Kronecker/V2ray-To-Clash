@@ -1,39 +1,61 @@
 name: Convert V2Ray to Clash
 
 on:
-  workflow_dispatch:
-    inputs:
-      subscription_url:
-        description: 'V2Ray subscription URL'
-        required: true
-        type: string
+  issues:
+    types: [opened]
 
 jobs:
   convert:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      issues: write
 
     steps:
+      - name: Extract subscription URL from issue
+        id: extract
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.issue.body || '';
+            const match = body.match(/Subscription URL[:\s]*\n?\s*(https?:\/\/[^\s\n]+)/i);
+            if (!match) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: '❌ Could not find a valid subscription URL in your issue. Please use the issue template and paste a URL starting with http:// or https://'
+              });
+              core.setFailed('No subscription URL found');
+              return;
+            }
+            core.setOutput('url', match[1]);
+
       - name: Checkout repository
+        if: steps.extract.outputs.url
         uses: actions/checkout@v4
 
       - name: Set up Python
+        if: steps.extract.outputs.url
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
       - name: Install PyYAML
+        if: steps.extract.outputs.url
         run: pip install pyyaml
 
       - name: Convert subscription to Clash
-        run: python convert.py "${{ inputs.subscription_url }}" clash_config.yaml
+        if: steps.extract.outputs.url
+        run: python convert.py "${{ steps.extract.outputs.url }}" clash_config.yaml
 
       - name: Read node count
+        if: steps.extract.outputs.url
         id: count
         run: echo "count=$(cat node_count.txt)" >> "$GITHUB_OUTPUT"
 
       - name: Commit and push
+        if: steps.extract.outputs.url
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -41,13 +63,25 @@ jobs:
           git commit -m "Update Clash config (${{ steps.count.outputs.count }} nodes)" || echo "No changes"
           git push
 
-      - name: Output result
-        run: |
-          REPO="${{ github.repository }}"
-          SHA=$(git rev-parse HEAD)
-          echo "### Clash Config Generated" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Nodes**: ${{ steps.count.outputs.count }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **File**: [clash_config.yaml](https://github.com/${REPO}/blob/${SHA}/clash_config.yaml)" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Raw link: https://raw.githubusercontent.com/${REPO}/${SHA}/clash_config.yaml" >> "$GITHUB_STEP_SUMMARY"
+      - name: Comment result on issue
+        if: steps.extract.outputs.url
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const repo = context.repo.owner + '/' + context.repo.repo;
+            const sha = context.sha;
+            const count = '${{ steps.count.outputs.count }}';
+            const rawUrl = `https://raw.githubusercontent.com/${repo}/${sha}/clash_config.yaml`;
+            const fileUrl = `https://github.com/${repo}/blob/${sha}/clash_config.yaml`;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `### ✅ Clash Config Generated\n\n- **Nodes**: ${count}\n- **File**: [clash_config.yaml](${fileUrl})\n- **Download**: [raw link](${rawUrl})\n\nCopy the raw link and import it in Clash.`
+            });
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              state: 'closed'
+            });
