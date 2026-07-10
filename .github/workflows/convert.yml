@@ -1,0 +1,53 @@
+name: Convert V2Ray to Clash
+
+on:
+  workflow_dispatch:
+    inputs:
+      subscription_url:
+        description: 'V2Ray subscription URL'
+        required: true
+        type: string
+
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install PyYAML
+        run: pip install pyyaml
+
+      - name: Convert subscription to Clash
+        run: python convert.py "${{ inputs.subscription_url }}" clash_config.yaml
+
+      - name: Read node count
+        id: count
+        run: echo "count=$(cat node_count.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add clash_config.yaml
+          git commit -m "Update Clash config (${{ steps.count.outputs.count }} nodes)" || echo "No changes"
+          git push
+
+      - name: Output result
+        run: |
+          REPO="${{ github.repository }}"
+          SHA=$(git rev-parse HEAD)
+          echo "### Clash Config Generated" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Nodes**: ${{ steps.count.outputs.count }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **File**: [clash_config.yaml](https://github.com/${REPO}/blob/${SHA}/clash_config.yaml)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Raw link: https://raw.githubusercontent.com/${REPO}/${SHA}/clash_config.yaml" >> "$GITHUB_STEP_SUMMARY"
